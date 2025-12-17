@@ -10,18 +10,20 @@
 
 // ================== LIBRARIES ==================
 #include <WiFi.h>
-#include <WebServer.h>
-#include <WebSocketsServer.h>
+#include <ESPAsyncWebServer.h>
+// #include <WebSocketsServer.h>
 #include <ArduinoOTA.h>
 #include <PID_v1.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <LittleFS.h>
 
 // ================== WIFI (AP MODE) ==================
-const char *ssid = "Reflow Oven"; const char *password = "reflow123";
-WebServer server(80);
-WebSocketsServer ws(81);
+const char *ssid = "Reflow Hotplate";
+const char *password = "reflow123";
+AsyncWebServer server(80);
+// WebSocketsServer ws(81);
 
 // ================== PINS ==================
 #define SSR_PIN 26
@@ -171,45 +173,37 @@ void updateOLED()
 
 void setupWeb()
 {
-  server.on("/", []()
-            { server.send(200, "text/html", R"rawliteral(
-<!DOCTYPE html><html><head>
-<meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>ESP32 Reflow</title>
-<style>
-body{font-family:Arial;background:#111;color:#eee;text-align:center}
-button{font-size:20px;margin:8px;padding:10px 20px}
-</style>
-</head><body>
-<h2>ESP32 Reflow Hotplate</h2>
-<p id='t'>Temp: --</p>
-<p id='s'>State: --</p>
-<button onclick="fetch('/start')">START</button>
-<button onclick="fetch('/stop')">STOP</button><br>
-<button onclick="fetch('/profile?id=0')">LEAD</button>
-<button onclick="fetch('/profile?id=1')">LEAD-FREE</button>
-<script>
-setInterval(()=>{
- fetch('/status').then(r=>r.json()).then(j=>{
-  document.getElementById('t').innerText='Temp: '+j.temp.toFixed(1)+' C';
-  document.getElementById('s').innerText='State: '+j.state;
- });
-},1000);
-</script>
-</body></html>
-)rawliteral"); });
+  server.serveStatic("/", LittleFS, "/")
+      .setDefaultFile("index.html")
+      .setCacheControl("max-age=31536000");
 
-  server.on("/start", []()
-            { state=PREHEAT; stateStart=millis(); });
-  server.on("/stop", []()
-            { state=IDLE; digitalWrite(SSR_PIN,HIGH); });
-  server.on("/profile", []()
-            { activeProfile = server.arg("id").toInt(); });
-  server.on("/status", []()
-            { server.send(200, "application/json",
-                          String("{\"temp\":") + temperature +
-                              ",\"set\":" + setpoint +
-                              ",\"state\":" + state + "}"); });
+  server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+    state = PREHEAT;
+    stateStart = millis();
+    request->send(200); });
+
+  server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+    state = IDLE;
+    digitalWrite(SSR_PIN, HIGH);
+    request->send(200); });
+
+  server.on("/profile", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+    if (request->hasParam("id")) {
+      activeProfile = request->getParam("id")->value().toInt();
+    }
+    request->send(200); });
+
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+    String json =
+      "{\"temp\":" + String(temperature) +
+      ",\"set\":" + String(setpoint) +
+      ",\"state\":" + String(state) + "}";
+
+    request->send(200, "application/json", json); });
 
   server.begin();
 }
@@ -228,9 +222,14 @@ void setup()
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-    delay(300);
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ssid, password);
+
+  if (!LittleFS.begin())
+  {
+    Serial.println("An Error has occurred while mounting LittleFS");
+    return;
+  }
 
   setupWeb();
   setupOTA();
@@ -242,7 +241,6 @@ void setup()
 void loop()
 {
   ArduinoOTA.handle();
-  server.handleClient();
 
   temperature = readThermistor();
   if (isnan(temperature) || temperature > 270)
