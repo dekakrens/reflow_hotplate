@@ -12,7 +12,6 @@ void updateOLED()
                                         : state == SOAK      ? "SOAK"
                                         : state == REFLOW    ? "REF"
                                         : state == COOLDOWN  ? "COOL"
-                                        : state == DONE      ? "DONE"
                                                              : "ERR");
     display.display();
 }

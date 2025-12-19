@@ -47,10 +47,17 @@ enum ReflowState
     SOAK,
     REFLOW,
     COOLDOWN,
-    DONE,
     ERROR
 };
 extern ReflowState state;
+
+enum MachineMode
+{
+    MODE_IDLE,
+    MODE_REFLOW,
+    MODE_HEATER
+};
+extern MachineMode mode;
 
 // ==== Profiles ====
 #define MAX_PROFILES 5

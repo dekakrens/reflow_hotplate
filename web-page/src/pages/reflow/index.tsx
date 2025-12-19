@@ -1,24 +1,20 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import axios, { type AxiosError, type AxiosResponse } from "axios";
-import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import type { MachineState, ReflowProfileName } from "../../types/common";
-import { reflowSchema, type ReflowResponse, type ReflowType } from "./schema";
+import type { ReflowProfileName } from "../../types/common";
+import {
+  reflowSchema,
+  type ProfilesResponse,
+  type ReflowResponse,
+  type ReflowType,
+} from "./schema";
 
 const Reflow = () => {
-  const [state, setState] = useState<MachineState>("STOPPED");
-
-  const { data } = useQuery<ReflowResponse>({
+  const { data } = useQuery<ProfilesResponse>({
     queryKey: ["PROFILES"],
-    queryFn: async () => await axios.get("/profiles"),
+    queryFn: async () => await axios.get("/api/profiles"),
   });
-
-  useEffect(() => {
-    if (data) {
-      setState(data.state);
-    }
-  }, [data]);
 
   const {
     handleSubmit,
@@ -34,8 +30,8 @@ const Reflow = () => {
 
   const start = useMutation<AxiosResponse<ReflowResponse>, AxiosError, string>({
     mutationFn: async () =>
-      await axios.post("/reflow-start", {
-        state: state === "STARTED" ? "STOPPED" : "STARTED",
+      await axios.post("/api/reflow-start", {
+        state: "START",
       }),
   });
 
@@ -54,8 +50,13 @@ const Reflow = () => {
           <option disabled selected aria-disabled>
             Select profile
           </option>
-          <option value="LEAD">Lead</option>
-          <option value="LEAD-FREE">Lead Free</option>
+
+          {data?.data.profiles &&
+            data?.data.profiles.map((profile) => (
+              <option key={profile.name} value={profile.name}>
+                {profile.name}
+              </option>
+            ))}
         </select>
 
         {errors.profile?.message && (
@@ -68,7 +69,7 @@ const Reflow = () => {
           type="submit"
           className="btn btn-error btn-soft focus-within:outline-none"
         >
-          {state === "STARTED" ? "Stop" : "Start"}
+          Start
         </button>
       </div>
     </form>

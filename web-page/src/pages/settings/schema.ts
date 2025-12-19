@@ -7,7 +7,26 @@ export const PIDSchema = z.object({
   kd: z.number(),
 });
 
+export const ProfileSchema = z.object({
+  name: z.string().min(1, { error: "Profile name is required" }),
+  preheatTemp: z.number(),
+  soakTemp: z.number(),
+  reflowTemp: z.number(),
+  preheatTime: z.number(),
+  soakTime: z.number(),
+  reflowTime: z.number(),
+});
+
 export type SettingResponse = {
-  pid: PID;
-  profiles: ReflowProfile[];
+  data: {
+    pid: PID;
+    profiles: ReflowProfile[];
+  };
+};
+
+export type UpdatePIDResponse = {
+  data: {
+    status: string;
+    message: string;
+  };
 };

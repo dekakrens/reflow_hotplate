@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { IoMdSettings } from "react-icons/io";
+import { useNavigate } from "react-router-dom";
+import RealtimeCard from "./components/realtime_card";
 import Heater from "./heater";
 import Reflow from "./reflow";
-import { useNavigate } from "react-router-dom";
 
 const Main = () => {
   const nav = useNavigate();
+
   const [tabActive, setTabActive] = useState<"reflow" | "heater">("reflow");
 
   return (
@@ -32,10 +34,12 @@ const Main = () => {
       <div
         role="button"
         className="btn btn-ghost btn-square absolute right-0 bottom-0 text-2xl"
-        onClick={() => nav("setting")}
+        onClick={() => nav("settings")}
       >
         <IoMdSettings />
       </div>
+
+      <RealtimeCard />
 
       {tabActive === "reflow" && <Reflow />}
       {tabActive === "heater" && <Heater />}

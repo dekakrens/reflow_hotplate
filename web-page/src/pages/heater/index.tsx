@@ -1,13 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import axios, { type AxiosError, type AxiosResponse } from "axios";
-import { useState } from "react";
+import axios, { type AxiosError } from "axios";
 import { useForm } from "react-hook-form";
-import type { MachineState } from "../../types/common";
+import { useToast } from "../../hooks/useToast";
 import { heaterSchema, type HeaterResponse, type HeaterType } from "./schema";
 
 const Heater = () => {
-  const [state, setState] = useState<MachineState>("STOPPED");
+  const { showSuccessToast } = useToast();
 
   const {
     register,
@@ -21,12 +20,12 @@ const Heater = () => {
     },
   });
 
-  const start = useMutation<AxiosResponse<HeaterResponse>, AxiosError, number>({
+  const start = useMutation<HeaterResponse, AxiosError, number>({
     mutationFn: async (temperature) =>
-      await axios.post("/heater-start", {
+      await axios.post("/api/heater-start", {
         temperature,
       }),
-    onSuccess: (data) => setState(data.data.state),
+    onSuccess: (res) => showSuccessToast(res.data.message),
   });
 
   const onSubmit = (value: HeaterType) => start.mutate(value.temperature);
@@ -55,7 +54,7 @@ const Heater = () => {
           type="submit"
           className="btn btn-error btn-soft focus-within:outline-none"
         >
-          {state === "STARTED" ? "Stop" : "Start"}
+          Start
         </button>
       </div>
     </form>

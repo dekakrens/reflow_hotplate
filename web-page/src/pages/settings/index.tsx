@@ -1,16 +1,17 @@
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { BiChevronLeft } from "react-icons/bi";
 import { useNavigate } from "react-router-dom";
 import PIDSettings from "./components/pid_settings";
-import { useQuery } from "@tanstack/react-query";
 import type { SettingResponse } from "./schema";
-import axios from "axios";
+import ProfileSettings from "./components/profile_settings";
 
 const Settings = () => {
   const nav = useNavigate();
 
   const { data } = useQuery<SettingResponse>({
     queryKey: ["SETTINGS"],
-    queryFn: async () => await axios.get("/settings"),
+    queryFn: async () => await axios.get("/api/settings"),
   });
 
   return (
@@ -22,11 +23,8 @@ const Settings = () => {
         </button>
       </div>
 
-      <PIDSettings pid={data?.pid} />
-
-      <div className="card card-border bg-base-300 p-3">
-        <p>Profile Settings</p>
-      </div>
+      <PIDSettings pid={data?.data.pid} />
+      <ProfileSettings profiles={data?.data.profiles} />
     </div>
   );
 };

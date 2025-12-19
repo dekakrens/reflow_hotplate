@@ -1,20 +1,6 @@
 #include "config/config.h"
 
-#define SSR_WINDOW 1000
-unsigned long windowStart = 0;
 unsigned long stateStart = 0;
-
-void applySSR(double power)
-{
-    unsigned long now = millis();
-    if (now - windowStart >= SSR_WINDOW)
-        windowStart = now;
-
-    if ((power / 100.0) * SSR_WINDOW > (now - windowStart))
-        digitalWrite(SSR_PIN, LOW);
-    else
-        digitalWrite(SSR_PIN, HIGH);
-}
 
 void reflowStateChange()
 {
@@ -67,7 +53,7 @@ void reflowStateChange()
         {
             pid.SetMode(AUTOMATIC);
 
-            state = DONE;
+            state = IDLE;
         }
         break;
     }

@@ -7,7 +7,7 @@ const routes = [
     element: <Main />,
   },
   {
-    path: "setting",
+    path: "settings",
     element: <Settings />,
   },
 ];

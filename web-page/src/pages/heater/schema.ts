@@ -1,5 +1,4 @@
 import * as z from "zod";
-import type { MachineState } from "../../types/common";
 
 export const heaterSchema = z.object({
   temperature: z
@@ -11,6 +10,9 @@ export const heaterSchema = z.object({
 export type HeaterType = z.infer<typeof heaterSchema>;
 
 export type HeaterResponse = {
-  temperature: number;
-  state: MachineState;
+  data: {
+    status: string;
+    message: string;
+    temperature: number;
+  };
 };

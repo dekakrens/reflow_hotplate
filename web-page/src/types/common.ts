@@ -1,4 +1,12 @@
-export type MachineState = "STARTED" | "STOPPED" | "DONE" | "ERROR";
+export type MachineMode = "MODE_IDLE" | "MODE_HEATER" | "MODE_REFLOW";
+
+export type ReflowState =
+  | "IDLE"
+  | "PREHEAT"
+  | "SOAK"
+  | "REFLOW"
+  | "COOLDOWN"
+  | "ERROR";
 
 export type PID = {
   kp: number;
