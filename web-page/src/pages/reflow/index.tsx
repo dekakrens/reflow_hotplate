@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import axios from "axios";
+import axios, { type AxiosError, type AxiosResponse } from "axios";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { MachineState, ReflowProfileName } from "../../types/common";
@@ -10,8 +10,8 @@ const Reflow = () => {
   const [state, setState] = useState<MachineState>("STOPPED");
 
   const { data } = useQuery<ReflowResponse>({
-    queryKey: ["REFLOW_VALUE"],
-    queryFn: async () => await axios.get("/REFLOW"),
+    queryKey: ["PROFILES"],
+    queryFn: async () => await axios.get("/profiles"),
   });
 
   useEffect(() => {
@@ -27,14 +27,12 @@ const Reflow = () => {
   } = useForm<ReflowType>({
     resolver: zodResolver(reflowSchema),
     mode: "onSubmit",
+    defaultValues: {
+      profile: "",
+    },
   });
 
-  const setProfile = useMutation({
-    mutationFn: async (profile: ReflowProfileName) =>
-      await axios.post("/heater", { profile }),
-  });
-
-  const start = useMutation({
+  const start = useMutation<AxiosResponse<ReflowResponse>, AxiosError, string>({
     mutationFn: async () =>
       await axios.post("/reflow-start", {
         state: state === "STARTED" ? "STOPPED" : "STARTED",
@@ -42,7 +40,7 @@ const Reflow = () => {
   });
 
   const onSubmit = (value: ReflowType) =>
-    setProfile.mutate(value.profile as ReflowProfileName);
+    start.mutate(value.profile as ReflowProfileName);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -57,7 +55,7 @@ const Reflow = () => {
             Select profile
           </option>
           <option value="LEAD">Lead</option>
-          <option value="LEAD-FREE">Lead-Free</option>
+          <option value="LEAD-FREE">Lead Free</option>
         </select>
 
         {errors.profile?.message && (
@@ -67,8 +65,7 @@ const Reflow = () => {
 
       <div className="mt-2 flex justify-end">
         <button
-          type="button"
-          onClick={() => start.mutate()}
+          type="submit"
           className="btn btn-error btn-soft focus-within:outline-none"
         >
           {state === "STARTED" ? "Stop" : "Start"}

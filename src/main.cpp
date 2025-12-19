@@ -1,223 +1,43 @@
-// FULL FEATURE ESP32 REFLOW HOTPLATE FIRMWARE
-// Features:
-// - WiFi Web UI + REST API
-// - Live temperature graph (WebSocket)
-// - Multiple reflow profiles
-// - PID control with time‑proportional SSR
-// - OLED status display
-// - OTA firmware update
-// - Safety protections
-
 // ================== LIBRARIES ==================
-#include <WiFi.h>
-#include <ESPAsyncWebServer.h>
-// #include <WebSocketsServer.h>
-#include <ArduinoOTA.h>
-#include <PID_v1.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <LittleFS.h>
+#include <Arduino.h>
+#include "config/config.h"
+#include "display/oled.h"
+#include "control/pid_control.h"
+#include "profiles/profiles.h"
+#include "reflow/reflow.h"
+#include "sensors/thermistor.h"
+#include "web/web_server.h"
 
-// ================== WIFI (AP MODE) ==================
+// ===== WIFI (AP MODE) =====
 const char *ssid = "Reflow Hotplate";
 const char *password = "reflow123";
-AsyncWebServer server(80);
-// WebSocketsServer ws(81);
 
-// ================== PINS ==================
-#define SSR_PIN 26
-#define THERM_PIN 34
-#define OLED_SDA 21
-#define OLED_SCL 22
-
-// ================== OLED ==================
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
+// ===== OLED =====
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-// ================== THERMISTOR ==================
-#define SERIES_RESISTOR 10000
-#define NOMINAL_RESISTANCE 10000
-#define NOMINAL_TEMP 25
-#define BETA_COEFFICIENT 3950
+// ===== Server =====
+AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
 
-// ================== PID ==================
-double temperature, setpoint, pidOutput;
-PID pid(&temperature, &pidOutput, &setpoint, 2.0, 0.0025, 9.0, DIRECT);
-
-// ================== SSR ==================
-#define SSR_WINDOW 1000
-unsigned long windowStart = 0;
-
-// ================== STATE ==================
-enum ReflowState
-{
-  IDLE,
-  PREHEAT,
-  SOAK,
-  REFLOW,
-  COOLDOWN,
-  DONE,
-  ERROR
-};
+// ===== Reflow =====
 ReflowState state = IDLE;
-unsigned long stateStart = 0;
-
-// ================== PROFILE ==================
-struct ReflowProfile
-{
-  const char *name;
-  float preheatTemp;
-  float soakTemp;
-  float reflowTemp;
-  int preheatTime;
-  int soakTime;
-  int reflowTime;
-};
-
-ReflowProfile profiles[] = {
-    {"LEAD", 150, 150, 200, 90, 20, 20},
-    {"LEADFREE", 160, 180, 230, 100, 30, 30}};
+ReflowProfile profiles[MAX_PROFILES];
+int profileCount = 0;
 int activeProfile = 0;
 
-// ================== FUNCTIONS ==================
-
-double readThermistor()
-{
-  int adc = analogRead(THERM_PIN);
-  if (adc <= 0)
-    return NAN;
-
-  double resistance = SERIES_RESISTOR / ((4095.0 / adc) - 1.0);
-  double steinhart = resistance / NOMINAL_RESISTANCE;
-  steinhart = log(steinhart);
-  steinhart /= BETA_COEFFICIENT;
-  steinhart += 1.0 / (NOMINAL_TEMP + 273.15);
-  steinhart = 1.0 / steinhart;
-  return steinhart - 273.15;
-}
-
-void applySSR(double power)
-{
-  unsigned long now = millis();
-  if (now - windowStart > SSR_WINDOW)
-    windowStart += SSR_WINDOW;
-
-  if ((power / 100.0) * SSR_WINDOW > (now - windowStart))
-    digitalWrite(SSR_PIN, LOW);
-  else
-    digitalWrite(SSR_PIN, HIGH);
-}
-
-void updateProfile()
-{
-  auto &p = profiles[activeProfile];
-  unsigned long elapsed = millis() - stateStart;
-
-  switch (state)
-  {
-  case PREHEAT:
-  {
-    double ramp = elapsed * p.preheatTemp / (p.preheatTime * 1000.0);
-    setpoint = (ramp < p.preheatTemp) ? ramp : p.preheatTemp;
-  }
-    if (elapsed > p.preheatTime * 1000)
-    {
-      state = SOAK;
-      stateStart = millis();
-    }
-    break;
-
-  case SOAK:
-    setpoint = p.soakTemp;
-    if (elapsed > p.soakTime * 1000)
-    {
-      state = REFLOW;
-      stateStart = millis();
-    }
-    break;
-
-  case REFLOW:
-    setpoint = p.reflowTemp;
-    if (elapsed > p.reflowTime * 1000)
-    {
-      state = COOLDOWN;
-    }
-    break;
-
-  case COOLDOWN:
-    setpoint = 0;
-    if (temperature < 50)
-      state = DONE;
-    break;
-  }
-}
-
-void updateOLED()
-{
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.printf("TEMP %.1fC\n", temperature);
-  display.printf("SET  %.0fC\n", setpoint);
-  display.printf("PID  %.0f%%\n", pidOutput);
-  display.printf("MODE %s\n",
-                 state == IDLE ? "IDLE" : state == PREHEAT ? "PRE"
-                                      : state == SOAK      ? "SOAK"
-                                      : state == REFLOW    ? "REF"
-                                      : state == COOLDOWN  ? "COOL"
-                                      : state == DONE      ? "DONE"
-                                                           : "ERR");
-  display.display();
-}
-
-void setupWeb()
-{
-  server.serveStatic("/", LittleFS, "/")
-      .setDefaultFile("index.html")
-      .setCacheControl("max-age=31536000");
-
-  server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-    state = PREHEAT;
-    stateStart = millis();
-    request->send(200); });
-
-  server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-    state = IDLE;
-    digitalWrite(SSR_PIN, HIGH);
-    request->send(200); });
-
-  server.on("/profile", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-    if (request->hasParam("id")) {
-      activeProfile = request->getParam("id")->value().toInt();
-    }
-    request->send(200); });
-
-  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-    String json =
-      "{\"temp\":" + String(temperature) +
-      ",\"set\":" + String(setpoint) +
-      ",\"state\":" + String(state) + "}";
-
-    request->send(200, "application/json", json); });
-
-  server.begin();
-}
-
-void setupOTA()
-{
-  ArduinoOTA.setHostname("reflow-esp32");
-  ArduinoOTA.begin();
-}
+// ===== PID =====
+double temperature, setpoint, pidOutput;
+double kp = 2.0, ki = 0.0025, kd = 9.0;
+PID pid(&temperature, &pidOutput, &setpoint, kp, ki, kd, DIRECT);
 
 void setup()
 {
+  Serial.begin(115200);
   pinMode(SSR_PIN, OUTPUT);
   digitalWrite(SSR_PIN, HIGH);
+
+  pid.SetMode(AUTOMATIC);
+  pid.SetOutputLimits(0, 100);
 
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -231,27 +51,25 @@ void setup()
     return;
   }
 
-  setupWeb();
-  setupOTA();
+  loadPID();
+  loadProfiles();
 
-  pid.SetMode(AUTOMATIC);
-  pid.SetOutputLimits(0, 100);
+  setupWeb();
 }
 
 void loop()
 {
-  ArduinoOTA.handle();
-
   temperature = readThermistor();
-  if (isnan(temperature) || temperature > 270)
+  if (state == ERROR)
   {
-    state = ERROR;
     digitalWrite(SSR_PIN, HIGH);
+    pid.SetMode(MANUAL);
+    return;
   }
 
   if (state != IDLE && state != DONE && state != ERROR)
   {
-    updateProfile();
+    reflowStateChange();
     pid.Compute();
     applySSR(pidOutput);
   }

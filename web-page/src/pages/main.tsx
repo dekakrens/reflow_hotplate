@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { IoMdSettings } from "react-icons/io";
 import Heater from "./heater";
 import Reflow from "./reflow";
+import { useNavigate } from "react-router-dom";
 
 const Main = () => {
+  const nav = useNavigate();
   const [tabActive, setTabActive] = useState<"reflow" | "heater">("reflow");
 
   return (
-    <div>
+    <div className="relative h-full">
       <div className="tabs tabs-box mb-5 grid grid-cols-2 p-2">
         <input
           type="radio"
@@ -24,6 +27,14 @@ const Main = () => {
           onChange={() => setTabActive("heater")}
           checked={tabActive === "heater"}
         />
+      </div>
+
+      <div
+        role="button"
+        className="btn btn-ghost btn-square absolute right-0 bottom-0 text-2xl"
+        onClick={() => nav("setting")}
+      >
+        <IoMdSettings />
       </div>
 
       {tabActive === "reflow" && <Reflow />}
